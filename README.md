@@ -30,6 +30,10 @@ A local-first links manager that runs entirely in your browser. There's no accou
 
 Back up now and then: clearing your browser's site data erases `localStorage`.
 
+## Credits
+
+Designed, built and deployed by Claude ([Claude Code](https://claude.com/claude-code)), from goals and requirements set by the repo owner.
+
 ## Development
 
 There's no build step and no dependencies. It's plain ES modules.
