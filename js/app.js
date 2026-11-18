@@ -1,4 +1,4 @@
-import { Store, normalizeUrl, MAX_DEPTH, countLinks, walkContainers } from './store.js';
+import { Store, normalizeUrl, MAX_DEPTH, countLinks, walkContainers, hasExpandedDescendant } from './store.js';
 
 // ---------- setup ----------
 
@@ -51,6 +51,8 @@ const I = {
   download: '<svg viewBox="0 0 24 24"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>',
   library: '<svg viewBox="0 0 24 24"><path d="M5 4v16M10 4v16M15 5l4 15"/></svg>',
   inbox: '<svg viewBox="0 0 24 24"><path d="M4 13h4l2 3h4l2-3h4M5 5h14l1 8v6H4v-6z"/></svg>',
+  collapseAll: '<svg viewBox="0 0 24 24"><path d="m7 20 5-5 5 5M7 4l5 5 5-5"/></svg>',
+  expandAll: '<svg viewBox="0 0 24 24"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"/></svg>',
   note: '<svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/></svg>',
   folder: '<svg viewBox="0 0 24 24"><path d="M4 6h6l2 2h8v10H4z"/></svg>',
 };
@@ -465,12 +467,13 @@ function renderHeading(h, depth, target) {
   const n = countLinks(h);
   return `<section class="heading-section d${depth}${h.collapsed ? ' collapsed' : ''}" data-section="${h.id}">
     <div class="heading-header${target === h.id ? ' is-target' : ''}" draggable="true" data-heading="${h.id}" title="Click to add new links here · drag to reorder or nest">
-      <button class="twisty" data-action="toggle" data-id="${h.id}" aria-label="${h.collapsed ? 'Expand' : 'Collapse'}" aria-expanded="${!h.collapsed}">${I.chevron}</button>
+      <button class="twisty" data-action="toggle" data-id="${h.id}" title="${h.collapsed ? 'Expand' : 'Collapse'} (${isMac ? '⌥' : 'Alt'}-click: include sub-headings)" aria-label="${h.collapsed ? 'Expand' : 'Collapse'}" aria-expanded="${!h.collapsed}">${I.chevron}</button>
       <${tag} class="heading-title" data-id="${h.id}">${esc(h.title)}</${tag}>
       ${h.note && h.collapsed ? `<span class="heading-has-note" title="${esc(h.note)}" aria-label="Has a note">${I.note}</span>` : ''}
       <span class="heading-count">${n || ''}</span>
       <span class="row-actions">
         <button class="icon-btn" data-action="add-link" data-container="${h.id}" title="Add link here" aria-label="Add link here">${I.plus}</button>
+        ${h.children.length ? foldButton(h.id, !h.collapsed && !hasExpandedDescendant(h) ? 'expand' : 'collapse', 'sub-headings') : ''}
         ${depth < MAX_DEPTH ? `<button class="icon-btn" data-action="add-heading" data-parent="${h.id}" title="Add sub-heading" aria-label="Add sub-heading">${I.heading}</button>` : ''}
         <button class="icon-btn" data-action="edit-heading" data-id="${h.id}" title="Rename or annotate" aria-label="Rename or annotate">${I.edit}</button>
         <button class="icon-btn" data-action="delete-heading" data-id="${h.id}" title="Delete heading" aria-label="Delete heading">${I.trash}</button>
@@ -493,11 +496,17 @@ function quickAddHtml(target) {
   </form>`;
 }
 
+function foldButton(id, mode, what) {
+  const label = `${mode === 'collapse' ? 'Collapse' : 'Expand'} all ${what}`;
+  return `<button class="icon-btn" data-action="fold-all" data-id="${id}" data-mode="${mode}" title="${label}" aria-label="${label}">${mode === 'collapse' ? I.collapseAll : I.expandAll}</button>`;
+}
+
 function renderCollectionView(col) {
   const target = targetId();
   return `<header class="view-header">
       <h1 class="view-title" contenteditable="true" spellcheck="false" data-edit="collection" data-id="${col.id}">${esc(col.name)}</h1>
       <div class="view-actions">
+        ${col.children.length ? foldButton(col.id, hasExpandedDescendant(col) ? 'collapse' : 'expand', 'headings') : ''}
         <button class="icon-btn" data-action="add-heading" data-parent="${col.id}" title="Add heading" aria-label="Add heading">${I.heading}</button>
         <button class="icon-btn" data-action="export-md" data-id="${col.id}" title="Export as markdown" aria-label="Export as markdown">${I.download}</button>
         <button class="icon-btn" data-action="delete-collection" data-id="${col.id}" title="Delete collection" aria-label="Delete collection">${I.trash}</button>
@@ -793,7 +802,19 @@ const actions = {
     store.deleteHeading(c.node.id, { keepContents: !!r.alt });
     toast(`Deleted “${c.node.title}”`, { action: [undoAction] });
   },
-  toggle: (el) => store.toggleCollapsed(el.dataset.id),
+  toggle(el, e) {
+    // ⌥/Alt-click: fold or unfold the heading together with everything inside it
+    if (e.altKey) {
+      const next = !store.container(el.dataset.id)?.node.collapsed;
+      store.setCollapsedDeep(el.dataset.id, next, { self: next });
+    } else store.toggleCollapsed(el.dataset.id);
+  },
+  'fold-all'(el) {
+    const id = el.dataset.id;
+    const collapse = el.dataset.mode === 'collapse';
+    // a heading keeps itself open when folding its sub-headings, and opens itself when unfolding
+    store.setCollapsedDeep(id, collapse, { self: false });
+  },
   'add-link': (el) => openLinkDialog({ containerId: el.dataset.container }),
   'edit-link': (el) => openLinkDialog({ linkId: el.dataset.link }),
   'remove-ref'(el) {

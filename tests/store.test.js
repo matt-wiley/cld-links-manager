@@ -251,3 +251,28 @@ test('heading notes: update, clear, persist, markdown round trip', () => {
   assert.equal('note' in s.container(h).node, false);
   assert.ok(s.container(sub));
 });
+
+test('setCollapsedDeep collapses/expands everything below a container', async () => {
+  const { hasExpandedDescendant } = await import('../js/store.js');
+  const s = fresh();
+  const c = s.addCollection('C');
+  const a = s.addHeading(c, 'A');
+  const a1 = s.addHeading(a, 'A1');
+  const a11 = s.addHeading(a1, 'A11');
+  const b = s.addHeading(c, 'B');
+  const undoDepth = s.undoStack.length;
+
+  s.setCollapsedDeep(a, true, { self: false });
+  assert.equal(!!s.container(a).node.collapsed, false);
+  assert.equal(s.container(a1).node.collapsed, true);
+  assert.equal(s.container(a11).node.collapsed, true);
+  assert.equal(!!s.container(b).node.collapsed, false);
+  assert.equal(hasExpandedDescendant(s.container(a).node), false);
+  assert.equal(hasExpandedDescendant(s.getCollection(c)), true);
+
+  s.setCollapsedDeep(c, true);
+  assert.ok([a, a1, a11, b].every((id) => s.container(id).node.collapsed));
+  s.setCollapsedDeep(c, false);
+  assert.ok([a, a1, a11, b].every((id) => !s.container(id).node.collapsed));
+  assert.equal(s.undoStack.length, undoDepth); // view state, not undoable
+});

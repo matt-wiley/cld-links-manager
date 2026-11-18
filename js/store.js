@@ -109,6 +109,11 @@ export function findRefs(state, linkId) {
   return out;
 }
 
+/** Is any heading below this container expanded? */
+export function hasExpandedDescendant(container) {
+  return container.children.some((h) => !h.collapsed || hasExpandedDescendant(h));
+}
+
 export function countLinks(container) {
   let n = container.links.length;
   for (const c of container.children) n += countLinks(c);
@@ -554,6 +559,30 @@ export class Store {
     const next = value ?? !c.node.collapsed;
     if (next) c.node.collapsed = true;
     else delete c.node.collapsed;
+    this.save();
+    this.emit();
+  }
+
+  /**
+   * Collapse or expand every heading below container `id` in one step.
+   * `self` optionally sets the container's own state too (ignored for collections).
+   * A view preference like toggleCollapsed: persisted, not part of undo history.
+   */
+  setCollapsedDeep(id, collapsed, { self } = {}) {
+    const c = findContainer(this.state, id);
+    if (!c) return;
+    const apply = (h, v) => {
+      if (v) h.collapsed = true;
+      else delete h.collapsed;
+    };
+    const walk = (n) => {
+      for (const ch of n.children) {
+        apply(ch, collapsed);
+        walk(ch);
+      }
+    };
+    walk(c.node);
+    if (self !== undefined && c.depth > 0) apply(c.node, self);
     this.save();
     this.emit();
   }

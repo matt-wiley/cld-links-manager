@@ -10,6 +10,7 @@ A local-first links manager that runs entirely in your browser. There's no accou
 - **Links are stored once, by URL** (UUID, name, optional note). Collections and headings only hold references to those UUIDs, so the same link can sit in several places, and editing it once updates it everywhere.
 - **Notes** on every link (searchable along with names and URLs) and on every heading, to explain what a section is for. Use the pencil on a heading, or click its note.
 - **Drag and drop** links and headings to reorder them, nest headings, or move things between collections (drop on a collection in the sidebar). Hold <kbd>⌥</kbd>/<kbd>Alt</kbd> while dropping to copy instead of move.
+- **Collapse and expand** a heading, all sub-headings of a heading, or every heading in a collection at once. <kbd>⌥</kbd>/<kbd>Alt</kbd>-click a heading's arrow to fold it together with everything inside it.
 - **Undo and redo** for everything (<kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd>).
 - Light, dark, or match-system theme (toggle in the top right).
 - Changes sync live across open tabs.
