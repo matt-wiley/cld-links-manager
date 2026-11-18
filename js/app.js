@@ -1,4 +1,4 @@
-import { Store, normalizeUrl, MAX_DEPTH, countLinks, walkContainers, hasExpandedDescendant, collectionSlugs, findCollectionBySlug } from './store.js';
+import { Store, normalizeUrl, MAX_DEPTH, countLinks, walkContainers, hasExpandedDescendant, collectionSlugs, findCollectionBySlug, headingToMarkdown, headingToHtml } from './store.js';
 
 // ---------- setup ----------
 
@@ -475,6 +475,7 @@ function renderHeading(h, depth, target) {
         <button class="icon-btn" data-action="add-link" data-container="${h.id}" title="Add link here" aria-label="Add link here">${I.plus}</button>
         ${h.children.length ? foldButton(h.id, !h.collapsed && !hasExpandedDescendant(h) ? 'expand' : 'collapse', 'sub-headings') : ''}
         ${depth < MAX_DEPTH ? `<button class="icon-btn" data-action="add-heading" data-parent="${h.id}" title="Add sub-heading" aria-label="Add sub-heading">${I.heading}</button>` : ''}
+        <button class="icon-btn" data-action="copy-heading" data-id="${h.id}" title="Copy this section (markdown + rich text)" aria-label="Copy this section">${I.copy}</button>
         <button class="icon-btn" data-action="edit-heading" data-id="${h.id}" title="Rename or annotate" aria-label="Rename or annotate">${I.edit}</button>
         <button class="icon-btn" data-action="delete-heading" data-id="${h.id}" title="Delete heading" aria-label="Delete heading">${I.trash}</button>
       </span>
@@ -853,6 +854,32 @@ const actions = {
   'clear-target'() {
     if (ui.target) setTarget(null);
     else toast('Click a heading to add new links into it');
+  },
+  async 'copy-heading'(el) {
+    const c = store.container(el.dataset.id);
+    if (!c) return;
+    const md = headingToMarkdown(store.state, c.node.id);
+    const html = headingToHtml(store.state, c.node.id);
+    const n = countLinks(c.node);
+    try {
+      if (window.ClipboardItem && navigator.clipboard?.write) {
+        // rich text for docs/email/chat, markdown for editors and plain-text fields
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/plain': new Blob([md], { type: 'text/plain' }),
+            'text/html': new Blob([html], { type: 'text/html' }),
+          }),
+        ]);
+      } else await navigator.clipboard.writeText(md);
+      toast(`Copied “${c.node.title}” (${n} link${n === 1 ? '' : 's'})`);
+    } catch {
+      try {
+        await navigator.clipboard.writeText(md);
+        toast(`Copied “${c.node.title}” as markdown`);
+      } catch {
+        toast('Could not access the clipboard', { error: true });
+      }
+    }
   },
   async 'copy-collection-link'(el) {
     try {

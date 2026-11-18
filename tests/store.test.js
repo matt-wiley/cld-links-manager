@@ -296,3 +296,32 @@ test('collection slugs: readable, unique, forgiving lookup', async () => {
   assert.equal(findCollectionBySlug(s.state, b).id, b); // ids work too
   assert.equal(findCollectionBySlug(s.state, 'nope'), null);
 });
+
+test('heading copy: rebased markdown and safe HTML', async () => {
+  const { headingToMarkdown, headingToHtml } = await import('../js/store.js');
+  const s = fresh();
+  const c = s.addCollection('C');
+  const top = s.addHeading(c, 'Top');
+  const dep = s.addHeading(top, 'Deployments');
+  s.updateHeading(dep, { note: 'Tuesdays only' });
+  s.saveLink({ url: 'https://app.example.com', name: 'Prod <main>', note: 'live' }, { containerId: dep });
+  const sub = s.addHeading(dep, 'Pipelines');
+  s.saveLink({ url: 'https://ci.example.com/a(b)', name: 'CI' }, { containerId: sub });
+
+  const md = headingToMarkdown(s.state, dep);
+  assert.equal(
+    md,
+    '# Deployments\n\nTuesdays only\n\n- [Prod <main>](https://app.example.com/)\n  live\n\n## Pipelines\n\n- [CI](<https://ci.example.com/a(b)>)\n'
+  );
+  // what we copy can be pasted back in as a collection
+  const t = fresh();
+  const id = t.importMarkdown(md, 'Pasted');
+  assert.equal(t.getCollection(id).children[0].children[0].title, 'Pipelines');
+  assert.equal(t.getLink(t.getCollection(id).children[0].links[0]).name, 'Prod <main>');
+
+  const html = headingToHtml(s.state, dep);
+  assert.match(html, /^<h1>Deployments<\/h1>\n<p>Tuesdays only<\/p>/);
+  assert.match(html, /<li><a href="https:\/\/app\.example\.com\/">Prod &lt;main&gt;<\/a> — live<\/li>/);
+  assert.match(html, /<h2>Pipelines<\/h2>/);
+  assert.throws(() => headingToMarkdown(s.state, c)); // collections aren't headings
+});

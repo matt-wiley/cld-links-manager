@@ -190,30 +190,81 @@ const mdUnescape = (s) => String(s).replace(/\\([\[\]\\])/g, '$1');
 // a plain paragraph line that would otherwise parse as a heading, list item, comment or bare URL
 const MD_SPECIAL_LINE = /^(#|[-*+]\s|\d+\.\s|<!--|<?[a-z][a-z0-9+.-]*:\/\/|\\)/i;
 
+function mdLinkTarget(url, angle) {
+  return angle || /[\s()<>]/.test(url) ? `<${url}>` : url;
+}
+function writeLinksMd(state, ids, lines, angle) {
+  for (const id of ids) {
+    const l = state.links[id];
+    if (!l) continue;
+    lines.push(`- [${mdEscape(l.name)}](${mdLinkTarget(l.url, angle)})`);
+    for (const n of (l.note || '').split('\n')) if (n.trim()) lines.push(`  ${n}`);
+  }
+  if (ids.length) lines.push('');
+}
+function writeHeadingMd(state, h, depth, lines, angle) {
+  lines.push(`${'#'.repeat(depth)} ${h.title}`, '');
+  const note = (h.note || '').split('\n').filter((n) => n.trim());
+  for (const n of note) lines.push(MD_SPECIAL_LINE.test(n.trim()) ? `\\${n.trim()}` : n.trim());
+  if (note.length) lines.push('');
+  writeLinksMd(state, h.links, lines, angle);
+  for (const c of h.children) writeHeadingMd(state, c, depth + 1, lines, angle);
+}
+
 export function collectionToMarkdown(state, collectionId) {
   const col = state.collections.find((c) => c.id === collectionId);
   if (!col) throw new Error('No such collection');
   const lines = [`<!-- collection: ${col.name.replace(/-->/g, '')} -->`, ''];
-  const writeLinks = (ids) => {
-    for (const id of ids) {
-      const l = state.links[id];
-      if (!l) continue;
-      lines.push(`- [${mdEscape(l.name)}](<${l.url}>)`);
-      for (const n of (l.note || '').split('\n')) if (n.trim()) lines.push(`  ${n}`);
-    }
-    if (ids.length) lines.push('');
-  };
-  const writeHeading = (h, depth) => {
-    lines.push(`${'#'.repeat(depth)} ${h.title}`, '');
-    const note = (h.note || '').split('\n').filter((n) => n.trim());
-    for (const n of note) lines.push(MD_SPECIAL_LINE.test(n.trim()) ? `\\${n.trim()}` : n.trim());
-    if (note.length) lines.push('');
-    writeLinks(h.links);
-    for (const c of h.children) writeHeading(c, depth + 1);
-  };
-  writeLinks(col.links);
-  for (const h of col.children) writeHeading(h, 1);
+  writeLinksMd(state, col.links, lines, true);
+  for (const h of col.children) writeHeadingMd(state, h, 1, lines, true);
   return lines.join('\n').replace(/\n+$/, '\n');
+}
+
+function findHeading(state, headingId) {
+  for (const e of walkContainers(state)) if (e.node.id === headingId && e.depth > 0) return e.node;
+  throw new Error('No such heading');
+}
+
+/**
+ * A heading and everything under it as markdown, for the clipboard. Levels are rebased so
+ * the copied heading is "#", and plain (url) targets are used for the widest compatibility.
+ */
+export function headingToMarkdown(state, headingId) {
+  const lines = [];
+  writeHeadingMd(state, findHeading(state, headingId), 1, lines, false);
+  return lines.join('\n').replace(/\n+$/, '\n');
+}
+
+const htmlEscape = (s) =>
+  String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const SAFE_PROTOCOLS = ['http:', 'https:', 'mailto:', 'tel:', 'ftp:', 'file:'];
+
+/** The same section as HTML, so pasting into docs, email or chat keeps real headings and links. */
+export function headingToHtml(state, headingId) {
+  const out = [];
+  const note = (text) => htmlEscape(text).replace(/\n/g, '<br>');
+  const write = (h, depth) => {
+    const tag = `h${Math.min(depth, 6)}`;
+    out.push(`<${tag}>${htmlEscape(h.title)}</${tag}>`);
+    if (h.note) out.push(`<p>${note(h.note)}</p>`);
+    const items = h.links.map((id) => state.links[id]).filter(Boolean);
+    if (items.length) {
+      out.push('<ul>');
+      for (const l of items) {
+        let safe = false;
+        try {
+          safe = SAFE_PROTOCOLS.includes(new URL(l.url).protocol);
+        } catch {}
+        const name = htmlEscape(l.name);
+        const link = safe ? `<a href="${htmlEscape(l.url)}">${name}</a>` : name;
+        out.push(`<li>${link}${l.note ? ` — ${note(l.note)}` : ''}</li>`);
+      }
+      out.push('</ul>');
+    }
+    for (const c of h.children) write(c, depth + 1);
+  };
+  write(findHeading(state, headingId), 1);
+  return out.join('\n');
 }
 
 /** Parse markdown into { name, root } where root is a collection-shaped tree of {url,name,note} items. */
