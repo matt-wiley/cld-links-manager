@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Linkshelf</title>
+    <meta name="description" content="A local-first links manager. Collections, nested headings, notes, drag and drop. Your data never leaves your browser." />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <aside class="sidebar" id="sidebar">
+        <div class="brand">
+          <img src="favicon.svg" alt="" width="22" height="22" />
+          <span>Linkshelf</span>
+          <button class="icon-btn sidebar-close" data-action="toggle-sidebar" title="Close menu" aria-label="Close menu">✕</button>
+        </div>
+        <label class="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+          <input id="search" type="search" placeholder="Search links" autocomplete="off" data-focus-key="search" />
+          <kbd>/</kbd>
+        </label>
+        <nav class="nav" id="nav"></nav>
+        <div class="sidebar-section">
+          <span>Collections</span>
+          <button class="icon-btn" data-action="new-collection" title="New collection" aria-label="New collection">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
+          </button>
+        </div>
+        <ul class="collections" id="collections"></ul>
+        <div class="sidebar-footer">
+          <button class="text-btn" data-action="open-io">Import / export</button>
+          <button class="text-btn" data-action="open-bookmarklet">Bookmarklet</button>
+          <button class="text-btn" data-action="open-help">Shortcuts</button>
+          <div class="storage-meter" id="storage-meter"></div>
+        </div>
+      </aside>
+      <div class="scrim" data-action="toggle-sidebar"></div>
+      <main class="main" id="main">
+        <div class="topbar">
+          <button class="icon-btn menu-btn" data-action="toggle-sidebar" aria-label="Open menu">
+            <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          </button>
+          <div class="undo-group">
+            <button class="icon-btn" data-action="undo" id="undo-btn" title="Undo (⌘Z)" aria-label="Undo">
+              <svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></svg>
+            </button>
+            <button class="icon-btn" data-action="redo" id="redo-btn" title="Redo (⇧⌘Z)" aria-label="Redo">
+              <svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5" /><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" /></svg>
+            </button>
+          </div>
+        </div>
+        <div id="view" class="view"></div>
+      </main>
+    </div>
+
+    <!-- add / edit link -->
+    <dialog id="link-dialog" class="dialog">
+      <form method="dialog" id="link-form">
+        <h2 id="link-dialog-title">Add link</h2>
+        <label>URL<input name="url" type="text" inputmode="url" required autocomplete="off" spellcheck="false" /></label>
+        <div class="notice" id="link-dupe" hidden></div>
+        <label>Name<input name="name" type="text" autocomplete="off" placeholder="Defaults to the address" /></label>
+        <label>Note <span class="muted">optional, for context and search</span><textarea name="note" rows="3" placeholder="What is this? When do you use it?"></textarea></label>
+        <label id="link-location-label"><span id="link-location-text">Save to</span><select name="location"></select></label>
+        <div class="refs" id="link-refs"></div>
+        <div class="dialog-actions">
+          <button type="button" class="btn danger subtle" id="link-delete" hidden>Delete everywhere</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn" value="cancel" data-close>Cancel</button>
+          <button type="submit" class="btn primary" value="save">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- generic prompt / confirm -->
+    <dialog id="ask-dialog" class="dialog small">
+      <form method="dialog" id="ask-form">
+        <h2 id="ask-title"></h2>
+        <p id="ask-message" class="muted"></p>
+        <label id="ask-label"><span id="ask-label-text"></span><input name="value" type="text" autocomplete="off" /></label>
+        <div class="dialog-actions">
+          <button type="button" class="btn subtle" id="ask-alt" hidden></button>
+          <span class="spacer"></span>
+          <button type="button" class="btn" data-close>Cancel</button>
+          <button type="submit" class="btn primary" id="ask-ok">OK</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- import / export -->
+    <dialog id="io-dialog" class="dialog">
+      <form method="dialog">
+        <h2>Import / export</h2>
+        <p class="muted">Everything lives in this browser's local storage. Export a backup now and then, or to move to another browser.</p>
+        <h3>Export</h3>
+        <div class="btn-row">
+          <button type="button" class="btn" data-action="export-json">Full backup (.json)</button>
+          <button type="button" class="btn" data-action="export-md-all">All collections (.md)</button>
+        </div>
+        <h3>Import</h3>
+        <p class="muted">A Linkshelf <code>.json</code> backup, or any markdown file: <code>#</code> headings become headings and <code>- [name](url)</code> or bare URLs become links.</p>
+        <div class="btn-row">
+          <label class="btn file-btn">Choose file…<input type="file" id="import-file" accept=".json,.md,.markdown,.txt,application/json,text/markdown,text/plain" multiple hidden /></label>
+          <label class="inline-check"><input type="checkbox" id="import-replace" /> Replace everything (JSON only)</label>
+        </div>
+        <details>
+          <summary>Or paste markdown</summary>
+          <textarea id="import-text" rows="8" placeholder="# Deployments&#10;- [Prod](https://example.com) — the live site"></textarea>
+          <div class="btn-row"><button type="button" class="btn" data-action="import-pasted">Import as new collection</button></div>
+        </details>
+        <h3 class="danger-text">Danger zone</h3>
+        <div class="btn-row"><button type="button" class="btn danger subtle" data-action="wipe">Erase all data</button></div>
+        <div class="dialog-actions"><span class="spacer"></span><button type="button" class="btn" data-close>Done</button></div>
+      </form>
+    </dialog>
+
+    <!-- bookmarklet -->
+    <dialog id="bm-dialog" class="dialog">
+      <form method="dialog">
+        <h2>Save from any page</h2>
+        <p>Drag this button to your bookmarks bar:</p>
+        <p class="bm-wrap"><a class="bookmarklet" id="bookmarklet" title="Drag me to your bookmarks bar">+ Linkshelf</a></p>
+        <p class="muted">Click it on any page to save that page here, with its title as the name. Any text you've selected on the page becomes the note.</p>
+        <h3>Other quick ways to add</h3>
+        <ul class="tips">
+          <li><b>Paste anywhere.</b> Copy a URL, click the page, press <kbd>⌘V</kbd>. Several URLs at once work too.</li>
+          <li><b>Drag in.</b> Drag a link or the address-bar icon from another window and drop it on a heading.</li>
+          <li><b>Type it.</b> The add bar takes <code>url</code> or <code>url some name</code>.</li>
+        </ul>
+        <div class="dialog-actions"><span class="spacer"></span><button type="button" class="btn" data-close>Done</button></div>
+      </form>
+    </dialog>
+
+    <!-- help -->
+    <dialog id="help-dialog" class="dialog small">
+      <form method="dialog">
+        <h2>Shortcuts</h2>
+        <table class="keys">
+          <tr><td><kbd>/</kbd></td><td>Search</td></tr>
+          <tr><td><kbd>n</kbd></td><td>Add a link</td></tr>
+          <tr><td><kbd>⌘V</kbd></td><td>Paste URLs into the current heading</td></tr>
+          <tr><td><kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd></td><td>Undo / redo</td></tr>
+          <tr><td><kbd>⌥</kbd> while dropping</td><td>Copy instead of move</td></tr>
+          <tr><td>Double-click</td><td>Rename a heading or collection</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Clear search, close dialogs</td></tr>
+        </table>
+        <div class="dialog-actions"><span class="spacer"></span><button type="button" class="btn" data-close>Done</button></div>
+      </form>
+    </dialog>
+
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
