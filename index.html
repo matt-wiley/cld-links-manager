@@ -87,6 +87,20 @@
       </form>
     </dialog>
 
+    <!-- edit heading -->
+    <dialog id="heading-dialog" class="dialog">
+      <form method="dialog" id="heading-form">
+        <h2>Edit heading</h2>
+        <label>Heading<input name="title" type="text" required autocomplete="off" /></label>
+        <label>Note <span class="muted">optional: what this section is for, how to use these links</span><textarea name="note" rows="4" placeholder="e.g. Deploys go out Tuesdays. Ask #platform before touching prod."></textarea></label>
+        <div class="dialog-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" data-close>Cancel</button>
+          <button type="submit" class="btn primary">Save</button>
+        </div>
+      </form>
+    </dialog>
+
     <!-- generic prompt / confirm -->
     <dialog id="ask-dialog" class="dialog small">
       <form method="dialog" id="ask-form">
@@ -157,6 +171,7 @@
           <tr><td><kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd></td><td>Undo / redo</td></tr>
           <tr><td><kbd>⌥</kbd> while dropping</td><td>Copy instead of move</td></tr>
           <tr><td>Double-click</td><td>Rename a heading or collection</td></tr>
+          <tr><td>Click a heading note</td><td>Edit it (pencil adds one)</td></tr>
           <tr><td><kbd>Esc</kbd></td><td>Clear search, close dialogs</td></tr>
         </table>
         <div class="dialog-actions"><span class="spacer"></span><button type="button" class="btn" data-close>Done</button></div>

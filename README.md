@@ -8,7 +8,7 @@ A local-first links manager that runs entirely in your browser. There's no accou
 
 - **Collections** (e.g. "My App") hold your links, organized under **headings and sub-headings**, nested up to 6 levels (the same as markdown `#` to `######`).
 - **Links are stored once, by URL** (UUID, name, optional note). Collections and headings only hold references to those UUIDs, so the same link can sit in several places, and editing it once updates it everywhere.
-- **Notes** on every link, searchable along with names and URLs.
+- **Notes** on every link (searchable along with names and URLs) and on every heading, to explain what a section is for. Use the pencil on a heading, or click its note.
 - **Drag and drop** links and headings to reorder them, nest headings, or move things between collections (drop on a collection in the sidebar). Hold <kbd>⌥</kbd>/<kbd>Alt</kbd> while dropping to copy instead of move.
 - **Undo and redo** for everything (<kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd>).
 - Light, dark, or match-system theme (toggle in the top right).
@@ -27,7 +27,7 @@ A local-first links manager that runs entirely in your browser. There's no accou
 ## Import and export
 
 - **JSON:** a full backup you can restore or merge. Links are deduplicated by URL on merge.
-- **Markdown:** per collection. `#` headings become headings, and `- [name](url)` items become links, with indented lines as the note. Exports round-trip through import without loss, and any markdown list of links imports.
+- **Markdown:** per collection. `#` headings become headings, and `- [name](url)` items become links, with indented lines as the note. Plain text right under a heading becomes that heading's note. Exports round-trip through import without loss, and any markdown list of links imports.
 
 Back up now and then: clearing your browser's site data erases `localStorage`.
 

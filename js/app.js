@@ -51,6 +51,7 @@ const I = {
   download: '<svg viewBox="0 0 24 24"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>',
   library: '<svg viewBox="0 0 24 24"><path d="M5 4v16M10 4v16M15 5l4 15"/></svg>',
   inbox: '<svg viewBox="0 0 24 24"><path d="M4 13h4l2 3h4l2-3h4M5 5h14l1 8v6H4v-6z"/></svg>',
+  note: '<svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/></svg>',
   folder: '<svg viewBox="0 0 24 24"><path d="M4 6h6l2 2h8v10H4z"/></svg>',
 };
 
@@ -307,6 +308,33 @@ $('#link-delete').addEventListener('click', async () => {
   toast('Link deleted', { action: [undoAction] });
 });
 
+// ---------- heading dialog ----------
+
+let headingDlgId = null;
+function openHeadingDialog(id) {
+  const c = store.container(id);
+  if (!c || c.depth === 0) return;
+  headingDlgId = id;
+  const f = $('#heading-form');
+  f.title.value = c.node.title;
+  f.note.value = c.node.note || '';
+  $('#heading-dialog').showModal();
+  (c.node.note ? f.note : f.title).focus();
+}
+$('#heading-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const f = e.target;
+  try {
+    store.updateHeading(headingDlgId, { title: f.title.value, note: f.note.value });
+    $('#heading-dialog').close();
+  } catch (err) {
+    fail(err);
+  }
+});
+$('#heading-form').note.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) $('#heading-form').requestSubmit();
+});
+
 // ---------- adding links ----------
 
 /** Pull {url, name} pairs out of pasted / dropped text. */
@@ -416,15 +444,16 @@ function renderLinkRow(id, containerId, { showRefs = false } = {}) {
   </li>`;
 }
 
-function renderBody(node, depth, target) {
+function renderBody(node, depth, target, note = '') {
   const links = node.links.map((id) => renderLinkRow(id, node.id)).join('');
   const kids = node.children.map((h) => renderHeading(h, depth + 1, target)).join('');
-  const empty = !node.links.length && !node.children.length;
+  const empty = !node.links.length && !node.children.length && !note;
   const emptyMsg =
     depth === 0
       ? `Nothing here yet. Paste a URL (${isMac ? '⌘' : 'Ctrl+'}V), drop a link from another window, or add a heading.`
       : 'Empty. Drop links here, or select this heading and paste.';
   return `<div class="container-body" data-container="${node.id}">
+    ${note ? `<div class="heading-note" data-action="edit-heading" data-id="${node.id}" title="Click to edit the note">${linkify(note)}</div>` : ''}
     ${links ? `<ul class="links">${links}</ul>` : ''}
     ${empty ? `<div class="empty-drop">${esc(emptyMsg)}</div>` : ''}
     ${kids}
@@ -438,15 +467,16 @@ function renderHeading(h, depth, target) {
     <div class="heading-header${target === h.id ? ' is-target' : ''}" draggable="true" data-heading="${h.id}" title="Click to add new links here · drag to reorder or nest">
       <button class="twisty" data-action="toggle" data-id="${h.id}" aria-label="${h.collapsed ? 'Expand' : 'Collapse'}" aria-expanded="${!h.collapsed}">${I.chevron}</button>
       <${tag} class="heading-title" data-id="${h.id}">${esc(h.title)}</${tag}>
+      ${h.note && h.collapsed ? `<span class="heading-has-note" title="${esc(h.note)}" aria-label="Has a note">${I.note}</span>` : ''}
       <span class="heading-count">${n || ''}</span>
       <span class="row-actions">
         <button class="icon-btn" data-action="add-link" data-container="${h.id}" title="Add link here" aria-label="Add link here">${I.plus}</button>
         ${depth < MAX_DEPTH ? `<button class="icon-btn" data-action="add-heading" data-parent="${h.id}" title="Add sub-heading" aria-label="Add sub-heading">${I.heading}</button>` : ''}
-        <button class="icon-btn" data-action="rename-heading" data-id="${h.id}" title="Rename" aria-label="Rename">${I.edit}</button>
+        <button class="icon-btn" data-action="edit-heading" data-id="${h.id}" title="Rename or annotate" aria-label="Rename or annotate">${I.edit}</button>
         <button class="icon-btn" data-action="delete-heading" data-id="${h.id}" title="Delete heading" aria-label="Delete heading">${I.trash}</button>
       </span>
     </div>
-    ${renderBody(h, depth, target)}
+    ${renderBody(h, depth, target, h.note)}
   </section>`;
 }
 
@@ -736,6 +766,7 @@ const actions = {
       fail(err);
     }
   },
+  'edit-heading': (el) => openHeadingDialog(el.dataset.id),
   'rename-heading'(el) {
     const title = document.querySelector(`.heading-title[data-id="${el.dataset.id}"]`);
     if (title) inlineEdit(title, (v) => store.renameHeading(el.dataset.id, v));
@@ -878,6 +909,8 @@ document.addEventListener('click', (e) => {
     t.closest('dialog')?.close();
     return;
   }
+  const anchor = t.closest('a[href]');
+  if (anchor && !anchor.dataset.action) return;
   const el = t.closest('[data-action]');
   if (el) {
     const fn = actions[el.dataset.action];

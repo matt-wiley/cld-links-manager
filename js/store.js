@@ -4,7 +4,7 @@
 //   state.links        { [uuid]: { id, url, name, note, created, updated } }   unique by normalized url
 //   state.collections  [ Collection ]
 //   Collection         { id, name, links: [linkId], children: [Heading] }      the root container
-//   Heading            { id, title, links: [linkId], children: [Heading], collapsed? }
+//   Heading            { id, title, note?, links: [linkId], children: [Heading], collapsed? }
 //
 // Collections and headings only hold *references* (link UUIDs). A link can appear in
 // any number of places; editing it once updates it everywhere. Inside a container the
@@ -141,6 +141,8 @@ export function searchLinks(state, query) {
 
 const mdEscape = (s) => String(s).replace(/([\[\]\\])/g, '\\$1');
 const mdUnescape = (s) => String(s).replace(/\\([\[\]\\])/g, '$1');
+// a plain paragraph line that would otherwise parse as a heading, list item, comment or bare URL
+const MD_SPECIAL_LINE = /^(#|[-*+]\s|\d+\.\s|<!--|<?[a-z][a-z0-9+.-]*:\/\/|\\)/i;
 
 export function collectionToMarkdown(state, collectionId) {
   const col = state.collections.find((c) => c.id === collectionId);
@@ -157,6 +159,9 @@ export function collectionToMarkdown(state, collectionId) {
   };
   const writeHeading = (h, depth) => {
     lines.push(`${'#'.repeat(depth)} ${h.title}`, '');
+    const note = (h.note || '').split('\n').filter((n) => n.trim());
+    for (const n of note) lines.push(MD_SPECIAL_LINE.test(n.trim()) ? `\\${n.trim()}` : n.trim());
+    if (note.length) lines.push('');
     writeLinks(h.links);
     for (const c of h.children) writeHeading(c, depth + 1);
   };
@@ -182,7 +187,7 @@ export function parseMarkdown(text) {
       const level = m[1].length;
       const parentDepth = Math.min(level - 1, stack.length - 1);
       stack.length = parentDepth + 1;
-      const h = { title: m[2], items: [], children: [] };
+      const h = { title: m[2], note: '', items: [], children: [] };
       stack[parentDepth].children.push(h);
       stack.push(h);
       lastItem = null;
@@ -205,6 +210,11 @@ export function parseMarkdown(text) {
     }
     if (!line.trim()) continue;
     lastItem = null;
+    const top = stack[stack.length - 1];
+    if (top !== root && !top.items.length && !top.children.length) {
+      const t = line.trim().replace(/^\\/, '');
+      top.note = top.note ? `${top.note}\n${t}` : t;
+    }
   }
   return { name, root };
 }
@@ -235,6 +245,7 @@ export function sanitizeState(input) {
     if (isCollection) node.name = String(n.name || 'Untitled');
     else {
       node.title = String(n.title || 'Untitled');
+      if (typeof n.note === 'string' && n.note.trim()) node.note = n.note.trim();
       if (n.collapsed) node.collapsed = true;
     }
     if (depth < MAX_DEPTH) {
@@ -523,6 +534,19 @@ export class Store {
     });
   }
 
+  /** Update a heading's title and/or note. An empty note removes it. */
+  updateHeading(id, { title, note } = {}) {
+    this.mutate((s) => {
+      const c = findContainer(s, id);
+      if (!c || c.depth === 0) throw new Error('No such heading');
+      if (typeof title === 'string' && title.trim()) c.node.title = title.trim();
+      if (typeof note === 'string') {
+        if (note.trim()) c.node.note = note.trim();
+        else delete c.node.note;
+      }
+    });
+  }
+
   toggleCollapsed(id, value) {
     // collapse state is a view preference: persist it, but keep it out of undo history
     const c = findContainer(this.state, id);
@@ -634,6 +658,7 @@ export class Store {
         }
         for (const ch of src.children) {
           const h = newHeading(ch.title);
+          if (ch.note) h.note = ch.note;
           node.children.push(h);
           build(ch, h);
         }

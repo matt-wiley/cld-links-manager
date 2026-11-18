@@ -222,3 +222,32 @@ test('nested mutations form one undo step and roll back together', () => {
   );
   assert.equal(Object.keys(s.state.links).length, 0);
 });
+
+test('heading notes: update, clear, persist, markdown round trip', () => {
+  const s = fresh();
+  const c = s.addCollection('C');
+  const h = s.addHeading(c, 'Deployments');
+  s.updateHeading(h, { note: 'Deploys go out Tuesdays.\n- not a list item\nhttps://not-a-link.example\n# not a heading' });
+  const sub = s.addHeading(h, 'Sub');
+  s.saveLink({ url: 'a.com', name: 'A' }, { containerId: h });
+  assert.match(s.container(h).node.note, /^Deploys/);
+
+  const md = s.exportMarkdown(c);
+  const t = fresh();
+  const id = t.importMarkdown(md);
+  const h2 = t.getCollection(id).children[0];
+  assert.equal(h2.note, s.container(h).node.note);
+  assert.equal(h2.links.length, 1);
+  assert.equal(h2.children[0].title, 'Sub');
+  assert.equal(t.exportMarkdown(id), md);
+
+  // survives a JSON round trip
+  const u = fresh();
+  u.importJSON(s.exportJSON(), { mode: 'replace' });
+  assert.equal(u.state.collections[0].children[0].note, s.container(h).node.note);
+
+  s.updateHeading(h, { title: 'Deploys', note: '  ' });
+  assert.equal(s.container(h).node.title, 'Deploys');
+  assert.equal('note' in s.container(h).node, false);
+  assert.ok(s.container(sub));
+});
