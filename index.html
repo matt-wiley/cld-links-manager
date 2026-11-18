@@ -8,6 +8,13 @@
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="css/styles.css" />
+    <script>
+      // apply the saved theme before first paint to avoid a flash
+      try {
+        var t = localStorage.getItem('linkshelf:theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div class="app" id="app">
@@ -48,6 +55,7 @@
             <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
           </button>
           <div class="undo-group">
+            <button class="icon-btn" data-action="cycle-theme" id="theme-btn" title="Theme" aria-label="Theme"></button>
             <button class="icon-btn" data-action="undo" id="undo-btn" title="Undo (⌘Z)" aria-label="Undo">
               <svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></svg>
             </button>

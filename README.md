@@ -11,6 +11,7 @@ A local-first links manager that runs entirely in your browser. There's no accou
 - **Notes** on every link, searchable along with names and URLs.
 - **Drag and drop** links and headings to reorder them, nest headings, or move things between collections (drop on a collection in the sidebar). Hold <kbd>⌥</kbd>/<kbd>Alt</kbd> while dropping to copy instead of move.
 - **Undo and redo** for everything (<kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd>).
+- Light, dark, or match-system theme (toggle in the top right).
 - Changes sync live across open tabs.
 
 ## Adding links
