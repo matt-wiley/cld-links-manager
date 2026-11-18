@@ -25,6 +25,20 @@ A local-first links manager that runs entirely in your browser. There's no accou
 | Bookmarklet | Sidebar → *Bookmarklet*. One click saves the current page with its title, and any selected text becomes the note. |
 | <kbd>+</kbd> on a heading | Opens the full form (URL, name, note, location). |
 
+## Linking to a collection
+
+Each collection has its own address, built from its name:
+
+```
+https://matt-wiley.github.io/cld-links-manager/#my-app
+```
+
+- Use the link icon in a collection's header to copy its address. The address bar also updates as you move around, so back and forward work.
+- Matching is forgiving: `#my-app`, `#My_App` and `#my%20app` all open "My App".
+- If two collections share a name, the second becomes `#my-app-2`, and so on. `#all` and `#unfiled` open the link lists.
+- The address follows the name, so renaming a collection changes its link.
+- Links only open your own data: everything lives in your browser, so someone else opening the link sees their own Linkshelf.
+
 ## Import and export
 
 - **JSON:** a full backup you can restore or merge. Links are deduplicated by URL on merge.

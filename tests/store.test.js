@@ -276,3 +276,23 @@ test('setCollapsedDeep collapses/expands everything below a container', async ()
   assert.ok([a, a1, a11, b].every((id) => !s.container(id).node.collapsed));
   assert.equal(s.undoStack.length, undoDepth); // view state, not undoable
 });
+
+test('collection slugs: readable, unique, forgiving lookup', async () => {
+  const { slugify, collectionSlugs, findCollectionBySlug } = await import('../js/store.js');
+  assert.equal(slugify('My App!'), 'my-app');
+  assert.equal(slugify('Café  Déjà vu'), 'cafe-deja-vu');
+  assert.equal(slugify('***'), 'collection');
+  const s = fresh();
+  const a = s.addCollection('My App');
+  const b = s.addCollection('My app');
+  const all = s.addCollection('All');
+  const slugs = collectionSlugs(s.state);
+  assert.equal(slugs.get(a), 'my-app');
+  assert.equal(slugs.get(b), 'my-app-2');
+  assert.equal(slugs.get(all), 'all-2'); // "all" is reserved for the library view
+  assert.equal(findCollectionBySlug(s.state, 'my_app').id, a);
+  assert.equal(findCollectionBySlug(s.state, 'My App').id, a);
+  assert.equal(findCollectionBySlug(s.state, 'my-app-2').id, b);
+  assert.equal(findCollectionBySlug(s.state, b).id, b); // ids work too
+  assert.equal(findCollectionBySlug(s.state, 'nope'), null);
+});

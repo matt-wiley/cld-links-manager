@@ -1,4 +1,4 @@
-import { Store, normalizeUrl, MAX_DEPTH, countLinks, walkContainers, hasExpandedDescendant } from './store.js';
+import { Store, normalizeUrl, MAX_DEPTH, countLinks, walkContainers, hasExpandedDescendant, collectionSlugs, findCollectionBySlug } from './store.js';
 
 // ---------- setup ----------
 
@@ -508,6 +508,7 @@ function renderCollectionView(col) {
       <div class="view-actions">
         ${col.children.length ? foldButton(col.id, hasExpandedDescendant(col) ? 'collapse' : 'expand', 'headings') : ''}
         <button class="icon-btn" data-action="add-heading" data-parent="${col.id}" title="Add heading" aria-label="Add heading">${I.heading}</button>
+        <button class="icon-btn" data-action="copy-collection-link" data-id="${col.id}" title="Copy a link to this collection" aria-label="Copy link to this collection">${I.link}</button>
         <button class="icon-btn" data-action="export-md" data-id="${col.id}" title="Export as markdown" aria-label="Export as markdown">${I.download}</button>
         <button class="icon-btn" data-action="delete-collection" data-id="${col.id}" title="Delete collection" aria-label="Delete collection">${I.trash}</button>
       </div>
@@ -637,6 +638,7 @@ function render() {
   renderSidebar();
   renderView();
   restoreFocus(focus);
+  syncHash();
   document.title = currentCollection() && !query ? `${currentCollection().name} · Linkshelf` : 'Linkshelf';
   if (pendingFlash) {
     const { linkId, containerId } = pendingFlash;
@@ -653,19 +655,21 @@ store.subscribe(() => render());
 
 // ---------- navigation ----------
 
-function setView(view) {
+function setView(view, { push = true } = {}) {
   ui.view = view;
   if (view.type !== 'collection') ui.target = null;
   query = '';
   $('#search').value = '';
   saveUi();
+  validateUi();
+  syncHash({ push });
   document.body.classList.remove('sidebar-open');
   render();
   $('#main').scrollTop = 0;
 }
-function openCollection(id) {
+function openCollection(id, opts) {
   if (ui.view.type !== 'collection' || ui.view.id !== id) ui.target = null;
-  setView({ type: 'collection', id });
+  setView({ type: 'collection', id }, opts);
 }
 function setTarget(id) {
   ui.target = id;
@@ -849,6 +853,14 @@ const actions = {
   'clear-target'() {
     if (ui.target) setTarget(null);
     else toast('Click a heading to add new links into it');
+  },
+  async 'copy-collection-link'(el) {
+    try {
+      await navigator.clipboard.writeText(collectionUrl(el.dataset.id));
+      toast('Link to this collection copied');
+    } catch {
+      toast('Could not access the clipboard', { error: true });
+    }
   },
   'export-md'(el) {
     const col = store.getCollection(el.dataset.id);
@@ -1320,11 +1332,59 @@ function bookmarkletCode() {
   return 'javascript:' + js;
 }
 
-function handleHash() {
-  const m = location.hash.match(/^#add\?(.*)$/);
-  if (!m) return;
-  const p = new URLSearchParams(m[1]);
-  history.replaceState(null, '', appUrl());
+// ---------- URL routing: #my-app opens a collection, #all / #unfiled the lists ----------
+
+function viewHash() {
+  if (ui.view.type === 'collection') {
+    const slug = collectionSlugs(store.state).get(ui.view.id);
+    if (slug) return '#' + encodeURIComponent(slug);
+  }
+  if (ui.view.type === 'unfiled') return '#unfiled';
+  return store.state.collections.length || Object.keys(store.state.links).length ? '#all' : '';
+}
+let lastRoutedHash = null;
+function syncHash({ push = false } = {}) {
+  const h = viewHash();
+  if (location.hash === h || (!h && !location.hash)) return;
+  history[push ? 'pushState' : 'replaceState'](null, '', h || appUrl());
+  lastRoutedHash = location.hash;
+}
+function collectionUrl(id) {
+  return appUrl() + '#' + encodeURIComponent(collectionSlugs(store.state).get(id));
+}
+
+/** Show whatever the URL fragment asks for. Returns false if it named nothing we know. */
+function route() {
+  if (location.hash === lastRoutedHash) return true;
+  lastRoutedHash = location.hash;
+  let frag = location.hash.slice(1);
+  try {
+    frag = decodeURIComponent(frag);
+  } catch {}
+  if (/^add\?/.test(frag)) {
+    handleAdd(frag.slice(4));
+    return true;
+  }
+  if (!frag) return true;
+  if (frag === 'all') setView({ type: 'library' }, { push: false });
+  else if (frag === 'unfiled') setView({ type: 'unfiled' }, { push: false });
+  else {
+    const col = findCollectionBySlug(store.state, frag);
+    if (!col) {
+      toast(`No collection matches “#${frag}”`, { error: true });
+      syncHash();
+      return false;
+    }
+    openCollection(col.id, { push: false });
+  }
+  return true;
+}
+window.addEventListener('hashchange', route);
+window.addEventListener('popstate', route);
+
+function handleAdd(query) {
+  const p = new URLSearchParams(query);
+  syncHash();
   const url = p.get('url') || '';
   if (!url) return;
   if (!store.state.collections.length) {
@@ -1338,7 +1398,6 @@ function handleHash() {
     containerId: ui.lastLocation && store.container(ui.lastLocation) ? ui.lastLocation : targetId(),
   });
 }
-window.addEventListener('hashchange', handleHash);
 
 // ---------- sync between tabs ----------
 
@@ -1424,7 +1483,7 @@ const SAMPLE = `<!-- collection: My App -->
 if (store.state.collections.length && ui.view.type === 'library' && !storage?.getItem(UI_KEY)) {
   ui.view = { type: 'collection', id: store.state.collections[0].id };
 }
+if (location.hash) route();
 render();
-handleHash();
 if (!storage) toast('Local storage is blocked in this browser, so nothing will be saved.', { error: true, timeout: 15000 });
 navigator.storage?.persist?.().catch(() => {});

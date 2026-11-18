@@ -109,6 +109,47 @@ export function findRefs(state, linkId) {
   return out;
 }
 
+// ---------- collection slugs (for #links) ----------
+
+export const RESERVED_SLUGS = new Set(['all', 'unfiled', 'add', 'search']);
+
+/** "My App!" -> "my-app". Also used to normalize what people type into a URL. */
+export function slugify(text) {
+  return (
+    String(text || '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, '-')
+      .replace(/^-+|-+$/g, '') || 'collection'
+  );
+}
+
+/** Map of collection id -> unique slug. Duplicates (and reserved words) get -2, -3, … in sidebar order. */
+export function collectionSlugs(state) {
+  const used = new Set(RESERVED_SLUGS);
+  const out = new Map();
+  for (const c of state.collections) {
+    const base = slugify(c.name);
+    let slug = base;
+    for (let n = 2; used.has(slug); n++) slug = `${base}-${n}`;
+    used.add(slug);
+    out.set(c.id, slug);
+  }
+  return out;
+}
+
+/** Find a collection from a URL fragment: its slug (case/punctuation-insensitive) or its id. */
+export function findCollectionBySlug(state, fragment) {
+  const raw = String(fragment || '').trim();
+  if (!raw) return null;
+  const byId = state.collections.find((c) => c.id === raw);
+  if (byId) return byId;
+  const want = slugify(raw);
+  for (const [id, slug] of collectionSlugs(state)) if (slug === want) return state.collections.find((c) => c.id === id);
+  return null;
+}
+
 /** Is any heading below this container expanded? */
 export function hasExpandedDescendant(container) {
   return container.children.some((h) => !h.collapsed || hasExpandedDescendant(h));
