@@ -1384,14 +1384,16 @@ function collectionUrl(id) {
 function route() {
   if (location.hash === lastRoutedHash) return true;
   lastRoutedHash = location.hash;
-  let frag = location.hash.slice(1);
+  const raw = location.hash.slice(1);
+  // #add? carries a query string: hand it to URLSearchParams undecoded, or its values get decoded twice.
+  if (/^add\?/.test(raw)) {
+    handleAdd(raw.slice(4));
+    return true;
+  }
+  let frag = raw;
   try {
     frag = decodeURIComponent(frag);
   } catch {}
-  if (/^add\?/.test(frag)) {
-    handleAdd(frag.slice(4));
-    return true;
-  }
   if (!frag) return true;
   if (frag === 'all') setView({ type: 'library' }, { push: false });
   else if (frag === 'unfiled') setView({ type: 'unfiled' }, { push: false });
@@ -1412,7 +1414,8 @@ window.addEventListener('popstate', route);
 function handleAdd(query) {
   const p = new URLSearchParams(query);
   syncHash();
-  const url = p.get('url') || '';
+  // Percent-encode any whitespace left in the URL so the form gets a valid link.
+  const url = (p.get('url') || '').trim().replace(/\s/g, encodeURIComponent);
   if (!url) return;
   if (!store.state.collections.length) {
     store.addCollection('Inbox');
